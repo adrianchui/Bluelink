@@ -1,68 +1,68 @@
 import express from "express";
-import { BlueLinky } from "bluelinky";
+import Bluelinky from "bluelinky";
 
 const app = express();
-app.use(express.json());
+const PORT = process.env.PORT || 8080;
 
-const API_KEY  = process.env.API_KEY;
-const USER     = process.env.BLUELINK_USERNAME;
-const PASS     = process.env.BLUELINK_PASSWORD;
-const PIN      = process.env.BLUELINK_PIN;
-const REGION   = (process.env.BLUELINK_REGION || "US").toUpperCase();
-const BRAND    = (process.env.BLUELINK_BRAND  || "HYUNDAI").toUpperCase();
-const PORT     = process.env.PORT || 8080;
-
-function checkKey(req, res) {
-  const k = req.headers["x-api-key"];
-  if (!API_KEY || k !== API_KEY) {
-    res.status(401).json({ error: "Unauthorized" });
-    return false;
-  }
-  return true;
+// Normalize brand casing
+function normalizeBrand(brand) {
+  if (!brand) return "Hyundai";
+  const b = brand.toUpperCase();
+  if (b === "HYUNDAI") return "Hyundai";
+  if (b === "KIA") return "Kia";
+  if (b === "GENESIS") return "Genesis";
+  return brand;
 }
 
-async function getClient() {
-  return new BlueLinky({
-    username: USER,
-    password: PASS,
-    pin: PIN,
-    region: REGION,
-    brand: BRAND
+// Create Bluelinky client
+const client = new Bluelinky({
+  username: process.env.BLUELINK_USERNAME,
+  password: process.env.BLUELINK_PASSWORD,
+  pin: process.env.BLUELINK_PIN,
+  region: process.env.BLUELINK_REGION || "US",
+  brand: normalizeBrand(process.env.BLUELINK_BRAND || "Hyundai"),
+});
+
+app.get("/", (req, res) => {
+  res.json({
+    ok: true,
+    message: "Bluelinky Cloud API active.",
+    region: process.env.BLUELINK_REGION,
+    brand: normalizeBrand(process.env.BLUELINK_BRAND),
   });
-}
+});
 
+// Health endpoint
 app.get("/health", (req, res) => {
-  res.json({ ok: true, region: REGION, brand: BRAND });
+  res.json({
+    ok: true,
+    region: process.env.BLUELINK_REGION,
+    brand: normalizeBrand(process.env.BLUELINK_BRAND),
+  });
 });
 
-app.post("/lock", async (req, res) => {
-  if (!checkKey(req, res)) return;
-  try {
-    const client = await getClient();
-    const vehicles = await client.getVehicles();
-    if (!vehicles?.length) throw new Error("No vehicles found — try BLUELINK_REGION=CA/US");
-    const car = vehicles[0];
-    await car.lock();
-    res.json({ ok: true, action: "lock" });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: String(e) });
-  }
-});
-
+// Unlock car
 app.post("/unlock", async (req, res) => {
-  if (!checkKey(req, res)) return;
   try {
-    const client = await getClient();
     const vehicles = await client.getVehicles();
-    if (!vehicles?.length) throw new Error("No vehicles found — try BLUELINK_REGION=CA/US");
-    const car = vehicles[0];
-    await car.unlock();
-    res.json({ ok: true, action: "unlock" });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: String(e) });
+    if (!vehicles || vehicles.length === 0) throw new Error("No vehicles found.");
+    const result = await vehicles[0].unlock();
+    res.json({ ok: true, action: "unlock", result });
+  } catch (err) {
+    res.json({ ok: false, error: err.message });
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Listening on ${PORT}`);
+// Lock car
+app.post("/lock", async (req, res) => {
+  try {
+    const vehicles = await client.getVehicles();
+    if (!vehicles || vehicles.length === 0) throw new Error("No vehicles found.");
+    const result = await vehicles[0].lock();
+    res.json({ ok: true, action: "lock", result });
+  } catch (err) {
+    res.json({ ok: false, error: err.message });
+  }
 });
+
+app.listen(PORT, () => console.log(`Bluelinky API running on port ${PORT}`));
