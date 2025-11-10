@@ -1,17 +1,13 @@
 {
-  "name": "bluelinky-bridge",
+  "name": "bluelinky-cloud",
   "version": "1.0.0",
-  "description": "Simple Cloud Run bridge for Hyundai/Kia via Bluelinky",
+  "description": "Cloud Run service for Bluelinky API",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
-  "engines": {
-    "node": ">=18"
-  },
   "dependencies": {
-    "bluelinky": "^9.0.0",
-    "express": "^4.19.2",
-    "pino": "^9.3.2"
+    "express": "^4.18.2",
+    "bluelinky": "^6.3.0"
   }
 }
