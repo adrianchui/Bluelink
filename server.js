@@ -1,115 +1,73 @@
 import express from "express";
-import { Bluelinky } from "bluelinky";
+import { BlueLinky } from "bluelinky";
 
 const app = express();
-app.use(express.json());
+const PORT = process.env.PORT || 8080;
 
-// Load credentials from Cloud Run env vars
-const {
-  BLUELINK_USERNAME,
-  BLUELINK_PASSWORD,
-  BLUELINK_PIN,
-  BLUELINK_REGION,
-  BLUELINK_BRAND,
-  API_KEY
-} = process.env;
+// API Key
+const API_KEY = process.env.API_KEY;
 
-if (!API_KEY) {
-  console.error("ERROR: Missing API_KEY env var.");
-  process.exit(1);
-}
+// Bluelink account details
+const USERNAME = process.env.BLUELINK_USERNAME;
+const PASSWORD = process.env.BLUELINK_PASSWORD;
+const PIN = process.env.BLUELINK_PIN;
+const REGION = process.env.BLUELINK_REGION || "US";
+const BRAND = process.env.BLUELINK_BRAND || "HYUNDAI";
 
-let client = null;
-let vehicle = null;
+// Create client (v7 syntax)
+let client;
 
-// ------------------------------
-// Initialize Bluelinky v7 Client
-// ------------------------------
-async function initBluelinky() {
-  if (client && vehicle) return { client, vehicle };
-
-  console.log("Initializing Bluelinky client…");
-
-  client = new Bluelinky({
-    username: BLUELINK_USERNAME,
-    password: BLUELINK_PASSWORD,
-    pin: BLUELINK_PIN,
-    region: BLUELINK_REGION ?? "US",
-    brand: BLUELINK_BRAND ?? "HYUNDAI"
+async function createClient() {
+  console.log("Creating BlueLinky client...");
+  client = new BlueLinky({
+    username: USERNAME,
+    password: PASSWORD,
+    pin: PIN,
+    region: REGION,
+    brand: BRAND
   });
 
-  // Login (v7 uses OAuth behind the scenes)
-  await client.login();
+  client.on("ready", () => {
+    console.log("BlueLinky client ready!");
+  });
 
-  const vehicles = await client.getVehicles();
-
-  if (!vehicles.length) {
-    throw new Error("No vehicles found in account.");
-  }
-
-  vehicle = vehicles[0];
-
-  console.log(`Bluelinky initialized. Vehicle: ${vehicle.vin}`);
-
-  return { client, vehicle };
+  client.on("error", (err) => {
+    console.error("BlueLinky error:", err);
+  });
 }
 
-// ------------------------------
-// Middleware: API Key Validation
-// ------------------------------
-function requireKey(req, res, next) {
+createClient(); // initialize at startup
+
+// Middleware for API key
+app.use((req, res, next) => {
   const key = req.headers["x-api-key"];
   if (!key || key !== API_KEY) {
     return res.status(401).json({ ok: false, error: "Unauthorized" });
   }
   next();
-}
-
-// ------------------------------
-// API Endpoint Helpers
-// ------------------------------
-async function action(res, fn) {
-  try {
-    await initBluelinky();
-    const result = await fn();
-    return res.json({ ok: true, result });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ ok: false, error: err.message });
-  }
-}
-
-// ------------------------------
-// Routes
-// ------------------------------
-app.get("/", (req, res) => {
-  res.json({ ok: true, message: "Bluelinky API running" });
 });
 
-app.post("/unlock", requireKey, (req, res) =>
-  action(res, () => vehicle.unlock())
-);
+// Root endpoint
+app.get("/", (req, res) => {
+  res.json({ ok: true, status: "running" });
+});
 
-app.post("/lock", requireKey, (req, res) =>
-  action(res, () => vehicle.lock())
-);
+// Unlock endpoint
+app.post("/unlock", async (req, res) => {
+  try {
+    const vehicle = client.getVehicles()[0];
+    if (!vehicle) {
+      return res.status(500).json({ ok: false, error: "No vehicles found" });
+    }
 
-app.post("/start", requireKey, (req, res) =>
-  action(res, () => vehicle.start())
-);
+    const result = await vehicle.unlock();
+    return res.json({ ok: true, result });
+  } catch (err) {
+    console.error("Unlock failed:", err);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
 
-app.post("/stop", requireKey, (req, res) =>
-  action(res, () => vehicle.stop())
-);
-
-app.get("/status", requireKey, (req, res) =>
-  action(res, () => vehicle.status())
-);
-
-// ------------------------------
-// Start Server (Cloud Run needs PORT)
-// ------------------------------
-const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-  console.log("Server running on port", PORT);
+  console.log("Server listening on port:", PORT);
 });
