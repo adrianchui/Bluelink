@@ -1,5 +1,6 @@
 import express from "express";
-import { BlueLinky } from "bluelinky";
+import pkg from "bluelinky";
+const { BlueLinky } = pkg;
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -14,31 +15,43 @@ const PIN = process.env.BLUELINK_PIN;
 const REGION = process.env.BLUELINK_REGION || "US";
 const BRAND = process.env.BLUELINK_BRAND || "HYUNDAI";
 
-// Create client (v7 syntax)
-let client;
+let client = null;
+let ready = false;
 
-async function createClient() {
-  console.log("Creating BlueLinky client...");
-  client = new BlueLinky({
-    username: USERNAME,
-    password: PASSWORD,
-    pin: PIN,
-    region: REGION,
-    brand: BRAND
-  });
+// Initialize BlueLinky asynchronously
+async function init() {
+  console.log("Initializing BlueLinky...");
 
-  client.on("ready", () => {
-    console.log("BlueLinky client ready!");
-  });
+  try {
+    client = new BlueLinky({
+      username: USERNAME,
+      password: PASSWORD,
+      pin: PIN,
+      region: REGION,
+      brand: BRAND
+    });
 
-  client.on("error", (err) => {
-    console.error("BlueLinky error:", err);
-  });
+    client.on("ready", () => {
+      console.log("Bluelinky ready!");
+      ready = true;
+    });
+
+    client.on("error", (err) => {
+      console.error("Bluelinky error:", err);
+    });
+
+  } catch (err) {
+    console.error("Bluelinky init failed:", err);
+  }
 }
 
-createClient(); // initialize at startup
+// Start Express FIRST
+app.listen(PORT, () => {
+  console.log("Server listening on", PORT);
+  init();
+});
 
-// Middleware for API key
+// API key check
 app.use((req, res, next) => {
   const key = req.headers["x-api-key"];
   if (!key || key !== API_KEY) {
@@ -47,27 +60,21 @@ app.use((req, res, next) => {
   next();
 });
 
-// Root endpoint
+// Health
 app.get("/", (req, res) => {
-  res.json({ ok: true, status: "running" });
+  res.json({ ok: true, ready });
 });
 
-// Unlock endpoint
+// Unlock
 app.post("/unlock", async (req, res) => {
+  if (!ready) return res.status(503).json({ ok: false, error: "Client not ready" });
+
   try {
     const vehicle = client.getVehicles()[0];
-    if (!vehicle) {
-      return res.status(500).json({ ok: false, error: "No vehicles found" });
-    }
-
     const result = await vehicle.unlock();
-    return res.json({ ok: true, result });
+    res.json({ ok: true, result });
   } catch (err) {
-    console.error("Unlock failed:", err);
-    return res.status(500).json({ ok: false, error: err.message });
+    console.error("Unlock error:", err);
+    res.status(500).json({ ok: false, error: err.message });
   }
-});
-
-app.listen(PORT, () => {
-  console.log("Server listening on port:", PORT);
 });
