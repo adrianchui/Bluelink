@@ -1,14 +1,14 @@
-import express from "express";
-import blPkg from "bluelinky";
+import bluelinkyPkg from "bluelinky";
 
-// Handle CJS/ESM interop safely
-const BlueLinky = blPkg?.BlueLinky || blPkg?.default || blPkg;
+const Bluelinky = bluelinkyPkg.default;
+const { REGIONS, BRANDS } = bluelinkyPkg;
 
-if (typeof BlueLinky !== "function") {
-  // Fail fast with a clear message instead of crashing later
-  console.error("Bluelinky export not found. Check bluelinky package version/import style.");
+if (typeof Bluelinky !== "function") {
+  console.error("❌ Bluelinky default export not found.");
+  console.error("Keys available:", Object.keys(bluelinkyPkg));
   process.exit(1);
 }
+
 
 const app = express();
 app.use(express.json());
