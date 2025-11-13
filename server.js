@@ -1,72 +1,73 @@
 import express from "express";
-import Bluelinky from "bluelinky";
+import { Bluelinky, REGIONS, BRANDS } from "bluelinky";
 
 const app = express();
 app.use(express.json());
 
-const {
-  API_KEY,
-  BLUELINK_USERNAME,
-  BLUELINK_PASSWORD,
-  BLUELINK_PIN,
-  BLUELINK_REGION,
-  BLUELINK_BRAND
-} = process.env;
+const PORT = process.env.PORT || 8080;
 
-if (!API_KEY) {
-  console.error("Missing API_KEY");
-  process.exit(1);
+const API_KEY = process.env.API_KEY;
+
+// Bluelink ENV Vars
+const USERNAME = process.env.BLUELINK_USERNAME;
+const PASSWORD = process.env.BLUELINK_PASSWORD;
+const PIN = process.env.BLUELINK_PIN;
+const REGION = process.env.BLUELINK_REGION || "US";
+const BRAND = process.env.BLUELINK_BRAND || "HYUNDAI";
+
+if (!API_KEY) console.error("❌ Missing API_KEY");
+if (!USERNAME || !PASSWORD || !PIN) console.error("❌ Missing Bluelink credentials");
+
+let client;
+
+// Login at boot
+async function initBluelink() {
+  try {
+    client = new Bluelinky({
+      username: USERNAME,
+      password: PASSWORD,
+      pin: PIN,
+      region: REGIONS[REGION],
+      brand: BRANDS[BRAND],
+    });
+
+    await client.login();
+    console.log("✅ Bluelink login successful");
+  } catch (err) {
+    console.error("❌ Bluelink login failed:", err);
+  }
 }
 
-const client = new Bluelinky({
-  username: BLUELINK_USERNAME,
-  password: BLUELINK_PASSWORD,
-  pin: BLUELINK_PIN,
-  region: BLUELINK_REGION,
-  brand: BLUELINK_BRAND
-});
+initBluelink();
 
-app.use((req, res, next) => {
-  const key = req.header("X-API-Key");
-  if (key !== API_KEY) {
+// AUTH CHECK
+function verifyKey(req, res) {
+  if (req.headers["x-api-key"] !== API_KEY)
     return res.status(401).json({ ok: false, error: "Unauthorized" });
-  }
-  next();
-});
+}
 
+// ROOT TEST
 app.get("/", (req, res) => {
   res.json({
     ok: true,
-    region: BLUELINK_REGION,
-    brand: BLUELINK_BRAND
+    region: REGION,
+    brand: BRAND,
   });
 });
 
+// UNLOCK
 app.post("/unlock", async (req, res) => {
+  verifyKey(req, res);
+
   try {
-    const vehicles = await client.getVehicles();
-    const car = vehicles[0];
-    await car.unlock();
-    res.json({ ok: true });
+    const vehicle = client.getVehicles()[0];
+    const result = await vehicle.unlock();
+    res.json({ ok: true, result });
   } catch (err) {
-    console.error(err);
     res.json({ ok: false, error: err.message });
   }
 });
 
-app.post("/lock", async (req, res) => {
-  try {
-    const vehicles = await client.getVehicles();
-    const car = vehicles[0];
-    await car.lock();
-    res.json({ ok: true });
-  } catch (err) {
-    console.error(err);
-    res.json({ ok: false, error: err.message });
-  }
-});
-
-const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-  console.log("Server running on port", PORT);
+  console.log("🚀 Server running on port", PORT);
 });
