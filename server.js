@@ -1,7 +1,7 @@
 import express from "express";
 import pkg from "bluelinky";
 
-const { BlueLinky, REGIONS, BRANDS } = pkg;
+const { BlueLinky } = pkg;
 
 const app = express();
 app.use(express.json());
