@@ -1,65 +1,56 @@
 import express from "express";
-import { Bluelinky, REGIONS, BRANDS } from "bluelinky";
+import pkg from "bluelinky";
+
+const { BlueLinky, REGIONS, BRANDS } = pkg;
 
 const app = express();
 app.use(express.json());
 
-const PORT = process.env.PORT || 8080;
+let client = null;
+let ready = false;
 
-// 🔐 Hardcoded API key
-const API_KEY = "hf92n4dmA8zX239kLQ12";
-
-// Bluelink ENV Vars
-const USERNAME = process.env.BLUELINK_USERNAME;
-const PASSWORD = process.env.BLUELINK_PASSWORD;
-const PIN = process.env.BLUELINK_PIN;
-const REGION = process.env.BLUELINK_REGION || "US";
-const BRAND = process.env.BLUELINK_BRAND || "HYUNDAI";
-
-let client;
-
-// Login at boot
 async function initBluelink() {
   try {
-    client = new Bluelinky({
-      username: USERNAME,
-      password: PASSWORD,
-      pin: PIN,
-      region: REGIONS[REGION],
-      brand: BRANDS[BRAND],
+    client = new BlueLinky({
+      username: process.env.BLUELINK_USERNAME,
+      password: process.env.BLUELINK_PASSWORD,
+      pin: process.env.BLUELINK_PIN,
+      region: REGIONS[process.env.BLUELINK_REGION],
+      brand: BRANDS[process.env.BLUELINK_BRAND],
+      vin: process.env.BLUELINK_VIN
     });
 
     await client.login();
-    console.log("Logged in to Bluelink");
+    ready = true;
+    console.log("Bluelink ready");
   } catch (err) {
-    console.error("Login failed:", err);
+    console.error("❌ Bluelinky init failed:", err);
   }
 }
 
 initBluelink();
 
-// AUTH CHECK
-function verifyKey(req, res) {
-  if (req.headers["x-api-key"] !== API_KEY)
-    return res.status(401).json({ ok: false, error: "Unauthorized" });
-}
-
-// ROOT TEST
-app.get("/", (req, res) => {
-  res.json({ ok: true, region: REGION, brand: BRAND });
+app.get("/check", (req, res) => {
+  res.json({
+    ok: true,
+    message: "Server running",
+    hasApiKey: !!process.env.API_KEY,
+    ready
+  });
 });
 
-// UNLOCK
 app.post("/unlock", async (req, res) => {
-  verifyKey(req, res);
+  if (!ready) return res.status(503).json({ ok: false, error: "Not ready" });
 
   try {
-    const vehicle = client.getVehicles()[0];
-    const result = await vehicle.unlock();
-    res.json({ ok: true, result });
+    await client.unlock();
+    return res.json({ ok: true });
   } catch (err) {
-    res.json({ ok: false, error: err.message });
+    console.error("Unlock failed:", err);
+    return res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-app.listen(PORT, () => console.log("Server running on port", PORT));
+app.listen(process.env.PORT || 8080, () =>
+  console.log("Server listening on", process.env.PORT || 8080)
+);
