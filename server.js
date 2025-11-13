@@ -52,17 +52,18 @@ app.listen(PORT, () => {
 });
 
 // API key check
+app.get("/check", (req, res) => {
+  const hasApiKey = !!process.env.API_KEY;
+  res.json({ ok: true, message: "Server running", hasApiKey });
+});
+
+// API key check (must be AFTER /check)
 app.use((req, res, next) => {
   const key = req.headers["x-api-key"];
-  if (!key || key !== API_KEY) {
+  if (!key || key !== process.env.API_KEY) {
     return res.status(401).json({ ok: false, error: "Unauthorized" });
   }
   next();
-});
-
-// Health
-app.get("/", (req, res) => {
-  res.json({ ok: true, ready });
 });
 
 // Unlock
