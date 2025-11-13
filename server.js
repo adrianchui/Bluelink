@@ -1,6 +1,4 @@
-import express from "express";
-import pkg from "bluelinky";
-
+import pkg from "./bluelinky/index.js";
 const { BlueLinky } = pkg;
 
 const app = express();
