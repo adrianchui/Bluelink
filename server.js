@@ -40,8 +40,11 @@ initBluelink();
 
 // AUTH CHECK
 function verifyKey(req, res) {
-  if (req.headers["x-api-key"] !== API_KEY)
-    return res.status(401).json({ ok: false, error: "Unauthorized" });
+  if (req.headers["x-api-key"] !== API_KEY) {
+    res.status(401).json({ ok: false, error: "Unauthorized" });
+    return false;
+  }
+  return true;
 }
 
 // ROOT TEST
@@ -51,7 +54,7 @@ app.get("/", (req, res) => {
 
 // UNLOCK
 app.post("/unlock", async (req, res) => {
-  verifyKey(req, res);
+  if (!verifyKey(req, res)) return;
 
   try {
     const vehicle = client.getVehicles()[0];
@@ -62,4 +65,4 @@ app.post("/unlock", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => console.log("Server running on port", PORT));
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
