@@ -54,8 +54,15 @@ app.listen(PORT, () => {
 // API key check
 app.get("/check", (req, res) => {
   const hasApiKey = !!process.env.API_KEY;
-  res.json({ ok: true, message: "Server running", hasApiKey });
+  const isReady = ready === true;
+  res.json({
+    ok: true,
+    message: "Server running",
+    hasApiKey,
+    ready: isReady
+  });
 });
+
 
 // API key check (must be AFTER /check)
 app.use((req, res, next) => {
